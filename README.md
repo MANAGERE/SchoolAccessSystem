@@ -66,7 +66,7 @@ ESP kód je uložen ve složce esp/. Např.:
 
 esp/
 ├── src/
-│   ├── main.ino
+│   ├── esp32_code.ino
 │   └── firebase_config.h
 ├── lib/
 │   └── (knihovny, např. FirebaseArduino, MFRC522 atd.)
