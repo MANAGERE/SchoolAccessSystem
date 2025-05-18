@@ -1,4 +1,4 @@
-"# SchoolAccessSystem" 
+# SchoolAccessSystem
 _**Školní Přístupový Systém**
 _
 Tento projekt slouží jako jednoduchý přístupový systém postavený na Firebase a webových technologiích. Obsahuje autentizaci uživatelů, databázi přístupových kódů.
