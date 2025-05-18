@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Školní Přístupový Systém</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(270deg, #dfe6e6, #6d6f70, #717272, #cbedf8);
+      background-size: 800% 800%;
+      animation: animatedBG 30s ease infinite;
+      padding: 40px;
+      transition: background-color 0.3s, color 0.3s;
+    }
+ 
+    @keyframes animatedBG {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+ 
+    h1 {
+      text-align: center;
+      font-size: 2em;
+      color: #2c3e50;
+    }
+ 
+    #date-display {
+      text-align: center;
+      margin-bottom: 20px;
+      font-size: 1.4em;
+      color: #555;
+    }
+ 
+    #search-input {
+      display: block;
+      margin: 0 auto 20px auto;
+      padding: 10px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      width: 60%;
+    }
+ 
+    table {
+      width: 90%;
+      margin: 0 auto;
+      border-collapse: separate;
+      border-spacing: 0;
+      background-color: white;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      border-radius: 8px;
+      overflow: hidden;
+      transition: background-color 0.3s;
+    }
+ 
+    th, td {
+      padding: 16px;
+      text-align: left;
+    }
+ 
+    th {
+      background-color: #34495e;
+      color: white;
+    }
+ 
+    tr.late {
+      background-color: #afe9bd !important;
+      color: #155724;
+    }
+ 
+    tr.ontime {
+      background-color: #ffcccc !important;
+      color: black;
+    }
+ 
+    .admin-icon {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      font-size: 24px;
+    }
+ 
+    #notification {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #27ae60;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 8px;
+      display: none;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+ 
+    .delete-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 18px;
+    }
+ 
+    .delete-btn:hover {
+      color: red;
+    }
+  </style>
+</head>
+<body>
+ 
+  <div class="admin-icon">👮‍♂️</div>
+ 
+  <div id="date-display"></div>
+ 
+  <input type="text" id="search-input" placeholder="Hledat studenta...">
+ 
+  <h1>Tabulka Pozdních Příchodů</h1>
+ 
+  <table id="attendance-table">
+    <thead>
+      <tr>
+        <th>Jméno a Příjmení</th>
+        <th>Čas Příchodu</th>
+        <th>Pozdní Příchod</th>
+        <th>Akce</th>
+      </tr>
+    </thead>
+    <tbody id="table-body">
+      <!-- Data z Firebase -->
+    </tbody>
+  </table>
+ 
+  <div id="notification"></div>
+ 
+  <audio id="ping-sound" src="https://www.soundjay.com/buttons/sounds/button-16.mp3" preload="auto"></audio>
+  
+  
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDIJSipskDcQeyU9UV3_YXvbAk_71JkwKg",
+      authDomain: "https://employee-database-78acd-default-rtdb.europe-west1.firebasedatabase.app",
+    };
+    firebase.initializeApp(firebaseConfig);
+  
+    firebase.auth().onAuthStateChanged(user => {
+      if (!user) {
+        window.location.href = "login.html"; // pokud není přihlášený, přesměruj ho
+      }
+    });
+  </script>
+  
+  <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+  <script>
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    OneSignalDeferred.push(async function(OneSignal) {
+      await OneSignal.init({
+        appId: "2810da7b-8527-4b75-a590-2a0b087d4221",
+      });
+    });
+  </script>
+
+
+  <script>
+    
+    const tableBody = document.getElementById('table-body');
+    const notification = document.getElementById('notification');
+    const pingSound = document.getElementById('ping-sound');
+    let previousData = {};
+ 
+    const dateDisplay = document.getElementById('date-display');
+    const today = new Date();
+    const formattedDate = today.toLocaleDateString('cs-CZ', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+    dateDisplay.textContent = `Dnes je ${formattedDate}`;
+ 
+    document.getElementById('search-input').addEventListener('keyup', function() {
+      const value = this.value.toLowerCase();
+      const rows = document.querySelectorAll('#attendance-table tbody tr');
+      rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(value) ? '' : 'none';
+      });
+    });
+ 
+    async function fetchData() {
+      const response = await fetch('https://employee-database-78acd-default-rtdb.europe-west1.firebasedatabase.app/logs.json');
+      const data = await response.json();
+      updateTable(data);
+    }
+ 
+    function updateTable(data) {
+      let newHtml = '';
+      let hasNewEntry = false;
+ 
+      for (const key in data) {
+        const log = data[key];
+        const isLate = log.is_late ? "Ne" : "Ano";
+        const rowClass = log.is_late ? 'late' : 'ontime';
+ 
+        newHtml += `
+          <tr class="${rowClass}">
+            <td>${log.name}</td>
+            <td>${log.arrival_time}</td>
+            <td>${isLate}</td>
+            <td><button class="delete-btn" onclick="deleteLog('${key}')">🗑️</button></td>
+          </tr>
+        `;
+ 
+        if (!previousData[key]) {
+          hasNewEntry = true;
+          showNotification(`🛎️ Nový příchod: ${log.name} v ${log.arrival_time}`);
+        }
+      }
+ 
+      tableBody.innerHTML = newHtml;
+      previousData = data;
+ 
+      if (hasNewEntry) {
+        pingSound.play();
+      }
+    }
+ 
+    async function deleteLog(logKey) {
+      const confirmDelete = confirm("Opravdu chcete smazat tento záznam?");
+      if (!confirmDelete) return;
+ 
+      const response = await fetch(`https://employee-database-78acd-default-rtdb.europe-west1.firebasedatabase.app/logs/${logKey}.json`, {
+        method: "DELETE"
+      });
+ 
+      if (response.ok) {
+        showNotification("Záznam byl úspěšně smazán");
+        fetchData();
+      } else {
+        showNotification("❌ Chyba při mazání záznamu");
+      }
+    }
+ 
+    function showNotification(message) {
+      notification.textContent = message;
+      notification.style.display = 'block';
+      setTimeout(() => {
+        notification.style.display = 'none';
+      }, 4000);
+    }
+ 
+    setInterval(fetchData, 1000); // 1 sekunda
+    fetchData();
+  </script>
+ 
+</body>
+</html>
