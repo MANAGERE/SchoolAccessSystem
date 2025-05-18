@@ -10,7 +10,6 @@ Webové přihlášení uživatele (Firebase Auth)
 
 Evidence a správa přístupových záznamů (Realtime Database)
 
-Push notifikace přes OneSignal (funguje na PC, mobilu, iWatch)
 
 Hosting přes Firebase
 
